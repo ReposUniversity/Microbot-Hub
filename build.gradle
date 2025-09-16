@@ -18,7 +18,7 @@ apply from: 'gradle/plugin-utils.gradle'
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(project.ext.TARGET_JDK_VERSION)
-        vendor = JvmVendorSpec."${project.ext.JDK_VENDOR}"
+        // Allow any vendor for Java 11
     }
 }
 
@@ -270,13 +270,14 @@ tasks.register("generatePluginsJson") {
         def pluginRoot = file(project.ext.getPluginsSourcePath())
         def outputJson = file("${project.ext.getDocsOutputPath()}/plugins.json")
         def jarOutputDir = file("$buildDir/libs")
+        def useLocalUrls = project.findProperty('useLocalUrls') == 'true'
 
         def allPlugins = project.ext.discoverPlugins(pluginRoot)
-        def plugins = project.ext.generatePluginsJsonData(allPlugins, jarOutputDir)
+        def plugins = project.ext.generatePluginsJsonData(allPlugins, jarOutputDir, useLocalUrls)
 
         outputJson.parentFile.mkdirs()
         outputJson.text = JsonOutput.prettyPrint(JsonOutput.toJson(plugins))
-        logger.info("✅ Generated plugins.json with ${plugins.size()} plugins")
+        logger.info("✅ Generated plugins.json with ${plugins.size()} plugins (${useLocalUrls ? 'local URLs' : 'remote URLs'})")
     }
 }
 
