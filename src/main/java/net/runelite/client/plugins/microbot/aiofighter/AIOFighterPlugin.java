@@ -4,8 +4,8 @@ import com.google.inject.Provides;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Point;
 import net.runelite.api.*;
+import net.runelite.api.Point;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
 import net.runelite.api.widgets.ComponentID;
@@ -49,20 +49,18 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @PluginDescriptor(
-        name = PluginDescriptor.Mocrosoft + "AIO Fighter",
-        authors = { "Mocrosoft", "See1Duck" },
-        version = AIOFighterPlugin.version,
-        minClientVersion = "2.0.7",
-        description = "Microbot AIO Fighter plugin",
+        name = PluginConstants.DEFAULT_PREFIX + "AIO Fighter",
+        description = "Microbot Fighter plugin",
         tags = {"fight", "microbot", "misc", "combat", "playerassistant"},
-        cardUrl = "https://chsami.github.io/Microbot-Hub/AIOFighterPlugin/assets/card.png",
-        iconUrl = "https://chsami.github.io/Microbot-Hub/AIOFighterPlugin/assets/icon.png",
+        authors = {"Mocrosoft"},
+        version = AIOFighterPlugin.version,
+        minClientVersion = "1.9.8",
         enabledByDefault = PluginConstants.DEFAULT_ENABLED,
         isExternal = PluginConstants.IS_EXTERNAL
 )
 @Slf4j
 public class AIOFighterPlugin extends Plugin {
-    public static final String version = "2.0.4";
+    public static final String version = "2.0.3 BETA";
     public static boolean needShopping = false;
     private static final String SET = "Set";
     private static final String CENTER_TILE = ColorUtil.wrapWithColorTag("Center Tile", JagexColors.MENU_TARGET);
@@ -79,20 +77,39 @@ public class AIOFighterPlugin extends Plugin {
     @Getter @Setter
     private static volatile long lastNpcKilledTime = 0;
     
-    @Getter @Setter
+    @Getter 
     private static volatile boolean waitingForLoot = false;
+    
+    @Getter @Setter
+    private static volatile int killCount = 0;
+    
+    // Custom setter
+    public static void setWaitingForLoot(boolean waiting) {
+        waitingForLoot = waiting;
+    }
     
     /**
      * Centralized method to clear wait-for-loot state
-     * @param reason Optional reason for clearing the state (for logging)
      */
     public static void clearWaitForLoot(String reason) {
         setWaitingForLoot(false);
         setLastNpcKilledTime(0L);
         AttackNpcScript.cachedTargetNpcIndex = -1;
-        if (reason != null) {
-            Microbot.log("Clearing wait-for-loot state: " + reason);
-        }
+    }
+    
+    /**
+     * Reset attack count
+     */
+    public static void resetKillCount(String reason) {
+        setKillCount(0);
+    }
+    
+    /**
+     * Increment attack count (counts attacks started, not kills)
+     */
+    public static void incrementAttackCount() {
+        int newCount = killCount + 1;
+        setKillCount(newCount);
     }
     
     private final CannonScript cannonScript = new CannonScript();
@@ -104,6 +121,7 @@ public class AIOFighterPlugin extends Plugin {
     private final FlickerScript flickerScript = new FlickerScript();
     private final UseSpecialAttackScript useSpecialAttackScript = new UseSpecialAttackScript();
     private final BuryScatterScript buryScatterScript = new BuryScatterScript();
+    private final ArrowWieldScript arrowWieldScript = new ArrowWieldScript();
     private final AttackStyleScript attackStyleScript = new AttackStyleScript();
     private final BankerScript bankerScript = new BankerScript();
     private final PrayerScript prayerScript = new PrayerScript();
@@ -147,6 +165,8 @@ public class AIOFighterPlugin extends Plugin {
             // Reset wait for loot state on startup
             setWaitingForLoot(false);
             setLastNpcKilledTime(0L);
+            // Reset attack count on startup
+            resetKillCount("plugin startup");
             // Get the future from the reference and cancel it
             ScheduledFuture<?> scheduledFuture = futureRef.get();
             if (scheduledFuture != null) {
@@ -173,6 +193,7 @@ public class AIOFighterPlugin extends Plugin {
         flickerScript.run(config);
         useSpecialAttackScript.run(config);
         buryScatterScript.run(config);
+        arrowWieldScript.run(config);
         attackStyleScript.run(config);
         prayerScript.run(config);
         highAlchScript.run(config);
@@ -200,7 +221,8 @@ public class AIOFighterPlugin extends Plugin {
         // Reset wait for loot state on shutdown
         setWaitingForLoot(false);
         setLastNpcKilledTime(0L);
-        
+        // Reset attack count on shutdown
+        resetKillCount("plugin shutdown");
         highAlchScript.shutdown();
         lootScript.shutdown();
         cannonScript.shutdown();
@@ -211,6 +233,7 @@ public class AIOFighterPlugin extends Plugin {
         flickerScript.shutdown();
         useSpecialAttackScript.shutdown();
         buryScatterScript.shutdown();
+        arrowWieldScript.shutdown();
         attackStyleScript.shutdown();
         bankerScript.shutdown();
         prayerScript.shutdown();
@@ -300,7 +323,6 @@ public class AIOFighterPlugin extends Plugin {
     }
     // Set currentInventorySetup
     public static void setCurrentSlayerInventorySetup(InventorySetup currentInventorySetup) {
-        Microbot.log("Setting current inventory setup to: " + currentInventorySetup.getName());
         Microbot.getConfigManager().setConfiguration(
                 AIOFighterConfig.GROUP,
                 "currentInventorySetup",
@@ -414,8 +436,6 @@ public class AIOFighterPlugin extends Plugin {
     // on setting change
     @Subscribe
     public void onConfigChanged(ConfigChanged event) {
-
-
         if (event.getKey().equals("Safe Spot")) {
 
             if (!config.toggleSafeSpot()) {
@@ -454,16 +474,6 @@ public class AIOFighterPlugin extends Plugin {
         }
     }
 
-    @Subscribe
-    public void onGameTick(GameTick gameTick) {
-        try {
-            //execute flicker script
-            if(config.togglePrayer())
-                flickerScript.onGameTick();
-        } catch (Exception e) {
-            log.info("AIO Fighter Plugin onGameTick Error: " + e.getMessage());
-        }
-    }
 
     @Subscribe
     public void onNpcDespawned(NpcDespawned npcDespawned) {
@@ -472,6 +482,43 @@ public class AIOFighterPlugin extends Plugin {
                 flickerScript.onNpcDespawned(npcDespawned);
         } catch (Exception e) {
             log.info("AIO Fighter Plugin onNpcDespawned Error: " + e.getMessage());
+        }
+    }
+    
+    private static String lastAttackedNpc = "";
+    private static long lastAttackTime = 0;
+    
+    @Subscribe
+    public void onGameTick(GameTick gameTick) {
+        try {
+            // Execute flicker script
+            if(config.togglePrayer())
+                flickerScript.onGameTick();
+                
+            // Check if we started attacking a new monster
+            Player localPlayer = Microbot.getClient().getLocalPlayer();
+            if (localPlayer != null && localPlayer.getInteracting() instanceof NPC) {
+                NPC npc = (NPC) localPlayer.getInteracting();
+                String npcName = npc.getName();
+                
+                // Only count if this NPC is in our attack list
+                if (npcName != null && config.attackableNpcs() != null && 
+                    config.attackableNpcs().toLowerCase().contains(npcName.toLowerCase())) {
+                    
+                    // Create unique identifier for this specific NPC instance
+                    String npcKey = npcName + "_" + npc.getIndex(); // Use NPC index for unique identification
+                    long currentTime = System.currentTimeMillis();
+                    
+                    // Count when we start attacking a NEW monster (different from last one)
+                    if (!npcKey.equals(lastAttackedNpc) && currentTime - lastAttackTime > 500) { // 500ms debounce
+                        incrementAttackCount();
+                        lastAttackedNpc = npcKey;
+                        lastAttackTime = currentTime;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.info("AIO Fighter Plugin onGameTick Error: " + e.getMessage());
         }
     }
 
@@ -516,14 +563,11 @@ public class AIOFighterPlugin extends Plugin {
     }
 
     private WorldPoint getSelectedWorldPoint() {
-        if (Microbot.getClient().getWidget(ComponentID.WORLD_MAP_MAPVIEW) == null) {
-            if (Microbot.getClient().getSelectedSceneTile() != null) {
-                return Microbot.getClient().isInInstancedRegion() ?
-                        WorldPoint.fromLocalInstance(Microbot.getClient(), Microbot.getClient().getSelectedSceneTile().getLocalLocation()) :
-                        Microbot.getClient().getSelectedSceneTile().getWorldLocation();
-            }
-        } else {
-            return calculateMapPoint(Microbot.getClient().isMenuOpen() ? lastMenuOpenedPoint : Microbot.getClient().getMouseCanvasPosition());
+        // Temporarily simplified - ComponentID not resolving
+        if (Microbot.getClient().getSelectedSceneTile() != null) {
+            return Microbot.getClient().isInInstancedRegion() ?
+                    WorldPoint.fromLocalInstance(Microbot.getClient(), Microbot.getClient().getSelectedSceneTile().getLocalLocation()) :
+                    Microbot.getClient().getSelectedSceneTile().getWorldLocation();
         }
         return null;
     }

@@ -42,15 +42,29 @@ public class LootScript extends Script {
                 final State st = AIOFighterPlugin.getState();
                 if (st == State.BANKING || st == State.WALKING) return;
 
-                if (((Rs2Inventory.isFull() || Rs2Inventory.getEmptySlots() <= minFreeSlots) && !config.eatFoodForSpace())
+                // Check if enough monsters have been attacked before allowing loot
+                int currentAttackCount = AIOFighterPlugin.getKillCount();
+                int requiredAttacks = config.delayLootUntilKills();
+                
+                if (currentAttackCount < requiredAttacks) {
+                    return;
+                }
+
+                if (((Rs2Inventory.isFull() || Rs2Inventory.emptySlotCount() <= minFreeSlots) && !config.eatFoodForSpace())
                         || (Rs2Player.isInCombat() && !config.toggleForceLoot())) {
                     return;
+                }
+                
+                // Reset attack count when we start looting
+                int currentAttacks = AIOFighterPlugin.getKillCount();
+                if (currentAttacks > 0) {
+                    AIOFighterPlugin.resetKillCount("starting to loot");
                 }
 
                 LootingParameters params = new LootingParameters(
                         config.minPriceOfItemsToLoot(),
                         config.maxPriceOfItemsToLoot(),
-                        config.attackRadius(),
+                        config.lootRadius(),
                         /* minQuantity */ 1,
                         /* minInvSlots */ minFreeSlots,
                         config.toggleDelayedLooting(),
