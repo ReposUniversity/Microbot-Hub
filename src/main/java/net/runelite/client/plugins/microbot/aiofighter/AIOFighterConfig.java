@@ -362,6 +362,17 @@ public interface AIOFighterConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "OnlyBigBones",
+            name = "Only Big Bones",
+            description = "Only bury/collect 'Big Bones' instead of all bone types",
+            position = 16,
+            section = lootSection
+    )
+    default boolean toggleOnlyBigBones() {
+        return false;
+    }
+
+    @ConfigItem(
             keyName = "Wield arrows",
             name = "Auto wield arrows",
             description = "Automatically wield arrows when found in inventory",

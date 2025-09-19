@@ -81,7 +81,20 @@ public class LootScript extends Script {
                 }
 
                 if (config.looterStyle() == DefaultLooterStyle.GE_PRICE_RANGE || config.looterStyle() == DefaultLooterStyle.MIXED) builder.addByValue();
-                if (config.toggleBuryBones())       builder.addBones();
+                
+                // Handle bone collection based on config
+                if (config.toggleBuryBones()) {
+                    if (config.toggleOnlyBigBones()) {
+                        // Only collect big bones
+                        Predicate<GroundItem> bigBonesOnly = gi -> 
+                            gi.getName() != null && gi.getName().equalsIgnoreCase("Big bones");
+                        builder.addCustom("big_bones_only", bigBonesOnly, null);
+                    } else {
+                        // Collect all bones (default behavior)
+                        builder.addBones();
+                    }
+                }
+                
                 if (config.toggleScatter())         builder.addAshes();
                 if (config.toggleLootCoins())       builder.addCoins();
                 if (config.toggleLootUntradables()) builder.addUntradables();

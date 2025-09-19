@@ -11,6 +11,7 @@ import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class BuryScatterScript extends Script {
     public boolean run(AIOFighterConfig config) {
@@ -22,6 +23,14 @@ public class BuryScatterScript extends Script {
 
                 if (config.toggleBuryBones()) {
                     List<Rs2ItemModel> bones = Rs2Inventory.getBones();
+                    
+                    // Filter bones based on config setting
+                    if (config.toggleOnlyBigBones()) {
+                        bones = bones.stream()
+                                .filter(bone -> bone.getName().equalsIgnoreCase("Big bones"))
+                                .collect(Collectors.toList());
+                    }
+                    
                     processItems(bones, Rs2Spells.SINISTER_OFFERING, "bury");
                 }
                 if (config.toggleScatter()) {
